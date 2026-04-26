@@ -21,12 +21,12 @@
   const LAST_KEY = "ubike-go:last";
   const PRESET_KEY = "ubike-go:presets";
   const RIDE_KEY = "ubike-go:ride-mode";
+  const MOBILE_SCROLL_QUERY = window.matchMedia("(max-width: 767px)");
 
   const state = {
     stations: [],
     rideMode: localStorage.getItem(RIDE_KEY) === "1",
     rideTimer: null,
-    activeField: null,
     loadingCatalog: false
   };
 
@@ -77,60 +77,107 @@
       : '<div class="preset-item"><small>尚未儲存配置</small></div>';
   }
 
-  function normalize(value) {
+  function normalizeStationText(value) {
     return utils.normalizeText(value)
-      .replace(/捷運/g, "")
-      .replace(/車站/g, "")
-      .replace(/站$/g, "");
+      .replace(/^捷運/, "")
+      .replace(/^台北/, "")
+      .replace(/^臺北/, "")
+      .replace(/車站$/g, "")
+      .replace(/站$/g, "")
+      .replace(/號出口/g, "號出口")
+      .replace(/\+/g, "");
   }
 
-  function catalogVariants(query) {
-    const base = normalize(query);
+  function normalizeQuery(value) {
+    return normalizeStationText(value)
+      .replace(/路$/g, "")
+      .replace(/街$/g, "")
+      .replace(/巷$/g, "")
+      .replace(/弄$/g, "");
+  }
+
+  function splitChunks(value) {
+    return String(value || "").match(/[\u4e00-\u9fff]+|\d+|[a-zA-Z]+/g) || [];
+  }
+
+  function buildQueryVariants(query) {
+    const base = normalizeQuery(query);
     const variants = new Set();
+
     if (!base) {
       return [];
     }
 
     variants.add(base);
-    variants.add(base.replace(/站$/g, ""));
-    variants.add(base.replace(/^捷運/, ""));
-    variants.add(base.replace(/^台北/, ""));
-    variants.add(base.replace(/^臺北/, ""));
+    variants.add(base.replace(/號$/g, ""));
+    variants.add(base.replace(/號出口$/g, ""));
 
-    if (base.length > 2) {
-      variants.add(base.slice(0, -1));
+    const chunks = splitChunks(base);
+    if (chunks.length > 1) {
+      variants.add(chunks.join(""));
+      variants.add(chunks.join(" "));
+    }
+
+    const numberMatch = base.match(/(\d+)/);
+    if (numberMatch) {
+      const number = numberMatch[1];
+      variants.add(`${base.replace(number, "")}${number}號`);
+      variants.add(`${base.replace(number, "")}${number}號出口`);
+      variants.add(`${base.replace(number, "")}${number}`);
     }
 
     return [...variants].filter(Boolean);
   }
 
+  function buildStationSearchTexts(station) {
+    const texts = new Set();
+    const raw = normalizeStationText(station.raw_name || station.name || "");
+    const name = normalizeStationText(station.name || "");
+    const compact = raw.replace(/\(.*?\)/g, "");
+    const noStationWord = compact.replace(/(捷運|車站|站)/g, "");
+
+    [raw, name, compact, noStationWord].forEach((value) => {
+      if (value) {
+        texts.add(value);
+      }
+    });
+
+    const merged = `${raw}${name}${compact}${noStationWord}`;
+    splitChunks(merged).forEach((chunk) => {
+      texts.add(chunk);
+    });
+
+    return [...texts].filter(Boolean);
+  }
+
   function scoreCatalogStation(station, query) {
-    const name = normalize(station.name || station.raw_name);
-    const rawName = normalize(station.raw_name || station.name);
-    const variants = catalogVariants(query);
-    if (!variants.length) {
+    const queryVariants = buildQueryVariants(query);
+    if (!queryVariants.length) {
       return Number.POSITIVE_INFINITY;
     }
 
+    const stationTexts = buildStationSearchTexts(station);
     let best = Number.POSITIVE_INFINITY;
 
-    for (const variant of variants) {
-      if (!variant) {
-        continue;
-      }
+    for (const variant of queryVariants) {
+      const variantChunks = splitChunks(variant);
 
-      if (name === variant || rawName === variant) {
-        return 0;
-      }
+      for (const stationText of stationTexts) {
+        if (stationText === variant) {
+          return 0;
+        }
 
-      const haystacks = [name, rawName].filter(Boolean);
-      for (const haystack of haystacks) {
-        const index = haystack.indexOf(variant);
-        if (index !== -1) {
-          const score =
-            (index === 0 ? 0 : 180) +
-            Math.abs(haystack.length - variant.length) +
-            (station.active ? 0 : 90);
+        if (stationText.includes(variant)) {
+          const score = Math.max(1, Math.abs(stationText.length - variant.length));
+          if (score < best) {
+            best = score;
+          }
+          continue;
+        }
+
+        if (variantChunks.length > 1 && variantChunks.every((chunk) => stationText.includes(chunk))) {
+          const compactPenalty = stationText.indexOf(variantChunks[0]);
+          const score = 40 + variantChunks.length * 8 + Math.max(0, compactPenalty);
           if (score < best) {
             best = score;
           }
@@ -143,7 +190,7 @@
 
   function renderSuggestions(field, query) {
     const panel = field === "start" ? startSuggestions : endSuggestions;
-    const normalized = normalize(query);
+    const normalized = normalizeQuery(query);
 
     if (!state.stations.length || normalized.length < 1) {
       panel.hidden = true;
@@ -155,7 +202,7 @@
       .map((station) => ({ station, score: scoreCatalogStation(station, query) }))
       .filter((item) => Number.isFinite(item.score))
       .sort((a, b) => a.score - b.score)
-      .slice(0, 7);
+      .slice(0, 8);
 
     if (!candidates.length) {
       panel.innerHTML = `<div class="suggestion-empty">找不到符合的站點</div>`;
@@ -184,16 +231,6 @@
   function hideSuggestions(field) {
     const panel = field === "start" ? startSuggestions : endSuggestions;
     panel.hidden = true;
-  }
-
-  function setInputValue(field, value) {
-    const input = field === "start" ? startInput : endInput;
-    input.value = value;
-    renderSuggestions(field, value);
-  }
-
-  function getSuggestionAnchor(input) {
-    return input === startInput ? "start" : "end";
   }
 
   function nearestStationByGPS(lat, lng) {
@@ -241,12 +278,22 @@
 
       state.stations = Array.isArray(payload.stations) ? payload.stations : [];
       return state.stations;
-    } catch (error) {
+    } catch {
       setStatus("站點提示載入失敗，仍可直接查詢。", "warn");
       return [];
     } finally {
       state.loadingCatalog = false;
     }
+  }
+
+  function scrollToResultIfNeeded(force = false) {
+    if (!force || !MOBILE_SCROLL_QUERY.matches) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function renderResult(payload) {
@@ -293,7 +340,7 @@
     resultDetails.textContent = lines.join("\n");
   }
 
-  async function checkRoute({ silent = false } = {}) {
+  async function checkRoute({ silent = false, scrollToResult = false } = {}) {
     const start = startInput.value.trim();
     const end = endInput.value.trim();
 
@@ -322,6 +369,7 @@
       if (!response.ok) {
         renderResult(payload);
         setStatus(payload.message || "查詢失敗", "bad");
+        scrollToResultIfNeeded(scrollToResult);
         return;
       }
 
@@ -331,12 +379,14 @@
         state.rideMode ? "已騎乘模式：每 30 秒自動更新" : payload.message || "查詢完成",
         payload.decision === "ride" ? "good" : "bad"
       );
+      scrollToResultIfNeeded(scrollToResult);
     } catch {
       renderResult({
         error: "fetch_failed",
         message: "系統暫時無法取得資料"
       });
       setStatus("系統暫時無法取得資料", "bad");
+      scrollToResultIfNeeded(scrollToResult);
     }
   }
 
@@ -377,9 +427,11 @@
     startInput.value = last.start || "";
     endInput.value = last.end || "";
     setStatus("已載入上次使用的站點");
+    renderSuggestions("start", startInput.value);
+    renderSuggestions("end", endInput.value);
   }
 
-  async function applyGpsStart(force = false) {
+  function applyGpsStart(force = false) {
     if (!navigator.geolocation) {
       gpsHint.textContent = "此裝置不支援定位，請手動輸入起點。";
       return;
@@ -462,7 +514,7 @@
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    checkRoute();
+    checkRoute({ scrollToResult: true });
   });
 
   swapBtn.addEventListener("click", swapStations);
@@ -486,6 +538,8 @@
     startInput.value = preset.start;
     endInput.value = preset.end;
     setStatus(`已載入配置：${preset.name}`);
+    renderSuggestions("start", startInput.value);
+    renderSuggestions("end", endInput.value);
   });
 
   bindSuggestions(startInput, "start");
@@ -506,11 +560,12 @@
     .then(loadStationCatalog)
     .then(() => {
       if (!startInput.value.trim()) {
-        return applyGpsStart(false);
+        applyGpsStart(false);
+      } else {
+        renderSuggestions("start", startInput.value);
+        renderSuggestions("end", endInput.value);
+        gpsHint.textContent = "站點清單已載入，可直接輸入查詢。";
       }
-      renderSuggestions("start", startInput.value);
-      renderSuggestions("end", endInput.value);
-      gpsHint.textContent = "站點清單已載入，可直接輸入查詢。";
       return null;
     })
     .catch(() => {

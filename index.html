@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UBike GO</title>
-    <meta
-      name="description"
-      content="極簡 YouBike 雙站可行性判斷系統，快速判斷現在適不適合騎車。"
-    />
+    <title>Ubike go - 騎不騎ubike</title>
+    <meta name="description" content="Ubike go - 騎不騎ubike" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,9 +17,8 @@
     <main class="shell">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">UBike GO</p>
-          <h1>極簡 YouBike 雙站可行性判斷</h1>
-          <p class="lede">輸入起點與終點，立即判斷現在適不適合騎 YouBike。</p>
+          <p class="eyebrow">Ubike go</p>
+          <h1>騎不騎ubike</h1>
         </div>
         <div class="hero-orb" aria-hidden="true"></div>
       </section>
@@ -35,7 +31,7 @@
               <input
                 id="start-input"
                 name="start"
-                placeholder="例如：科技大樓站"
+                placeholder="例如：中山5、科技大樓"
                 autocomplete="off"
               />
               <div id="start-suggestions" class="suggestions" hidden></div>
@@ -66,7 +62,7 @@
         <div class="compact-row">
           <button type="button" id="ride-toggle" class="pill">已騎乘模式：關閉</button>
           <button type="button" id="use-last-btn" class="pill">載入上次使用</button>
-          <div class="hint" id="gps-hint">尚未定位，會在允許時自動選最近站點作為起點。</div>
+          <div class="hint" id="gps-hint">尚未定位，允許後會自動選最近站點作為起點。</div>
         </div>
 
         <div class="config-area">
