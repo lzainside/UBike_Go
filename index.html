@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UBike GO</title>
+    <meta
+      name="description"
+      content="極簡 YouBike 雙站可行性判斷系統，快速判斷現在適不適合騎車。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">UBike GO</p>
+          <h1>極簡 YouBike 雙站可行性判斷</h1>
+          <p class="lede">輸入起點與終點，立即判斷現在適不適合騎 YouBike。</p>
+        </div>
+        <div class="hero-orb" aria-hidden="true"></div>
+      </section>
+
+      <section class="panel">
+        <form id="check-form" class="form" autocomplete="off">
+          <label class="field">
+            <span>起點站</span>
+            <div class="field-wrap">
+              <input
+                id="start-input"
+                name="start"
+                placeholder="例如：科技大樓站"
+                autocomplete="off"
+              />
+              <div id="start-suggestions" class="suggestions" hidden></div>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>終點站</span>
+            <div class="field-wrap">
+              <input
+                id="end-input"
+                name="end"
+                placeholder="例如：六張犁"
+                autocomplete="off"
+              />
+              <div id="end-suggestions" class="suggestions" hidden></div>
+            </div>
+          </label>
+
+          <div class="actions">
+            <button type="button" id="swap-btn" class="secondary">交換起終點</button>
+            <button type="button" id="save-btn" class="secondary">儲存配置</button>
+            <button type="button" id="gps-btn" class="secondary">使用目前位置</button>
+            <button type="submit" class="primary">開始判斷</button>
+          </div>
+        </form>
+
+        <div class="compact-row">
+          <button type="button" id="ride-toggle" class="pill">已騎乘模式：關閉</button>
+          <button type="button" id="use-last-btn" class="pill">載入上次使用</button>
+          <div class="hint" id="gps-hint">尚未定位，會在允許時自動選最近站點作為起點。</div>
+        </div>
+
+        <div class="config-area">
+          <div class="section-title">已儲存配置</div>
+          <div id="preset-list" class="preset-list"></div>
+        </div>
+      </section>
+
+      <section class="result-card" id="result-card" aria-live="polite">
+        <div class="status-row">
+          <div class="status" id="status-line">尚未查詢</div>
+          <div class="live-indicator" id="live-indicator" hidden>
+            <span class="live-dot"></span>
+            <span>更新中</span>
+          </div>
+        </div>
+        <div id="result-main" class="result-main">輸入站點後開始判斷。</div>
+        <div id="result-details" class="result-details"></div>
+      </section>
+    </main>
+
+    <script src="./shared/station-utils.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

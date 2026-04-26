@@ -1,0 +1,10 @@
+{
+  "name": "ubike-go",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test/logic.test.js",
+    "check": "node --check shared/station-utils.js netlify/functions/check.js app.js"
+  }
+}
