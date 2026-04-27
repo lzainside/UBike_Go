@@ -1,12 +1,13 @@
 (function () {
   const utils = window.UBikeUtils;
   const form = document.getElementById("check-form");
+  const startField = document.getElementById("start-field");
   const startInput = document.getElementById("start-input");
   const endInput = document.getElementById("end-input");
   const swapBtn = document.getElementById("swap-btn");
   const saveBtn = document.getElementById("save-btn");
   const gpsBtn = document.getElementById("gps-btn");
-  const useLastBtn = document.getElementById("use-last-btn");
+  const goBtn = document.getElementById("go-btn");
   const rideToggle = document.getElementById("ride-toggle");
   const presetList = document.getElementById("preset-list");
   const resultCard = document.getElementById("result-card");
@@ -14,6 +15,7 @@
   const resultDetails = document.getElementById("result-details");
   const statusLine = document.getElementById("status-line");
   const liveIndicator = document.getElementById("live-indicator");
+  const liveText = document.getElementById("live-text");
   const gpsHint = document.getElementById("gps-hint");
   const startSuggestions = document.getElementById("start-suggestions");
   const endSuggestions = document.getElementById("end-suggestions");
@@ -22,6 +24,7 @@
   const PRESET_KEY = "ubike-go:presets";
   const RIDE_KEY = "ubike-go:ride-mode";
   const MOBILE_SCROLL_QUERY = window.matchMedia("(max-width: 767px)");
+  const RIDE_REFRESH_MS = 60_000;
 
   const state = {
     stations: [],
@@ -55,10 +58,20 @@
     statusLine.className = `status ${tone}`.trim();
   }
 
+  function triggerGoEffect() {
+    goBtn.classList.remove("burst");
+    void goBtn.offsetWidth;
+    goBtn.classList.add("burst");
+  }
+
   function setRideVisuals(enabled) {
-    rideToggle.textContent = enabled ? "已騎乘模式：開啟" : "已騎乘模式：關閉";
+    rideToggle.textContent = enabled ? "騎乘中" : "騎車";
+    rideToggle.classList.toggle("active", enabled);
     liveIndicator.hidden = !enabled;
+    liveText.textContent = enabled ? "更新中" : "";
     resultCard.classList.toggle("watching", enabled);
+    resultCard.classList.toggle("riding", enabled);
+    startField.classList.toggle("is-hidden", enabled);
   }
 
   function renderPresets() {
@@ -68,8 +81,8 @@
           .map(
             (preset, index) => `
               <button class="preset-item" type="button" data-index="${index}">
-                <strong>${escapeHTML(preset.name)}</strong>
-                <small>${escapeHTML(preset.start)} → ${escapeHTML(preset.end)}</small>
+                <strong>${escapeHTML(preset.start)}</strong>
+                <small>${escapeHTML(preset.end)}</small>
               </button>
             `
           )
@@ -85,7 +98,8 @@
       .replace(/車站$/g, "")
       .replace(/站$/g, "")
       .replace(/號出口/g, "號出口")
-      .replace(/\+/g, "");
+      .replace(/出口/g, "出口")
+      .replace(/[.-]/g, "");
   }
 
   function normalizeQuery(value) {
@@ -121,9 +135,11 @@
     const numberMatch = base.match(/(\d+)/);
     if (numberMatch) {
       const number = numberMatch[1];
-      variants.add(`${base.replace(number, "")}${number}號`);
-      variants.add(`${base.replace(number, "")}${number}號出口`);
-      variants.add(`${base.replace(number, "")}${number}`);
+      const stem = base.replace(number, "");
+      variants.add(`${stem}${number}`);
+      variants.add(`${stem}${number}號`);
+      variants.add(`${stem}${number}號出口`);
+      variants.add(`${stem}${number}出口`);
     }
 
     return [...variants].filter(Boolean);
@@ -134,16 +150,15 @@
     const raw = normalizeStationText(station.raw_name || station.name || "");
     const name = normalizeStationText(station.name || "");
     const compact = raw.replace(/\(.*?\)/g, "");
-    const noStationWord = compact.replace(/(捷運|車站|站)/g, "");
+    const noStopWord = compact.replace(/(捷運|車站|站)/g, "");
 
-    [raw, name, compact, noStationWord].forEach((value) => {
+    [raw, name, compact, noStopWord].forEach((value) => {
       if (value) {
         texts.add(value);
       }
     });
 
-    const merged = `${raw}${name}${compact}${noStationWord}`;
-    splitChunks(merged).forEach((chunk) => {
+    splitChunks(`${raw}${name}${compact}${noStopWord}`).forEach((chunk) => {
       texts.add(chunk);
     });
 
@@ -168,7 +183,8 @@
         }
 
         if (stationText.includes(variant)) {
-          const score = Math.max(1, Math.abs(stationText.length - variant.length));
+          const index = stationText.indexOf(variant);
+          const score = index * 3 + Math.abs(stationText.length - variant.length);
           if (score < best) {
             best = score;
           }
@@ -176,8 +192,7 @@
         }
 
         if (variantChunks.length > 1 && variantChunks.every((chunk) => stationText.includes(chunk))) {
-          const compactPenalty = stationText.indexOf(variantChunks[0]);
-          const score = 40 + variantChunks.length * 8 + Math.max(0, compactPenalty);
+          const score = 32 + variantChunks.length * 7 + stationText.indexOf(variantChunks[0]);
           if (score < best) {
             best = score;
           }
@@ -205,7 +220,7 @@
       .slice(0, 8);
 
     if (!candidates.length) {
-      panel.innerHTML = `<div class="suggestion-empty">找不到符合的站點</div>`;
+      panel.innerHTML = '<div class="suggestion-empty">找不到符合的站點</div>';
       panel.hidden = false;
       return;
     }
@@ -304,10 +319,34 @@
       return;
     }
 
-    const ride = payload.decision === "ride";
-    resultMain.className = `result-main ${ride ? "good" : "bad"}`;
-    resultMain.textContent = ride ? "🚴 可騎車" : "🚶 不建議騎車";
+    const rideAllowed = payload.decision === "ride";
+    resultMain.className = `result-main ${rideAllowed ? "good" : "bad"}`;
 
+    if (state.rideMode) {
+      resultMain.textContent = `終點 ${payload.end_station}`;
+      const lines = [`剩餘車位：${payload.end_slots}`];
+
+      if (payload.end_slots <= 0) {
+        lines.push("");
+        lines.push("最近備案：");
+        for (const station of payload.nearby_stations || []) {
+          lines.push(`- ${station.station}（剩餘車位 ${station.slots}，距離約 ${station.distance_m}m）`);
+        }
+      }
+
+      if (payload.updated_at) {
+        const updated = new Date(payload.updated_at);
+        if (!Number.isNaN(updated.getTime())) {
+          lines.push("");
+          lines.push(`更新時間：${updated.toLocaleTimeString("zh-TW")}`);
+        }
+      }
+
+      resultDetails.textContent = lines.join("\n");
+      return;
+    }
+
+    resultMain.textContent = rideAllowed ? "可騎車" : "不建議騎車";
     const lines = [
       `起點：${payload.start_station}（車輛 ${payload.start_bikes}）`,
       `終點：${payload.end_station}（車位 ${payload.end_slots}）`
@@ -321,19 +360,11 @@
       }
     }
 
-    if (payload.nearby_stations?.length) {
+    if (payload.nearby_stations?.length && payload.end_slots <= 0) {
       lines.push("");
-      lines.push("附近站點：");
+      lines.push("最近備案：");
       for (const station of payload.nearby_stations.slice(0, 2)) {
         lines.push(`- ${station.station}（剩餘車位 ${station.slots}，距離約 ${station.distance_m}m）`);
-      }
-    }
-
-    if (payload.updated_at) {
-      const updated = new Date(payload.updated_at);
-      if (!Number.isNaN(updated.getTime())) {
-        lines.push("");
-        lines.push(`更新時間：${updated.toLocaleString("zh-TW")}`);
       }
     }
 
@@ -344,10 +375,10 @@
     const start = startInput.value.trim();
     const end = endInput.value.trim();
 
-    if (!start || !end) {
+    if (!end || (!state.rideMode && !start)) {
       setStatus("請先輸入起點與終點", "warn");
-      resultMain.textContent = "尚未查詢";
-      resultDetails.textContent = "請輸入兩個站點名稱後開始判斷。";
+      resultMain.textContent = "輸入起點與終點後，按下 GO!!";
+      resultDetails.textContent = "";
       return;
     }
 
@@ -356,7 +387,7 @@
     }
 
     const url = new URL("/check", window.location.origin);
-    url.searchParams.set("start", start);
+    url.searchParams.set("start", state.rideMode ? start || end : start);
     url.searchParams.set("end", end);
     if (state.rideMode) {
       url.searchParams.set("watch", "1");
@@ -376,7 +407,7 @@
       writeJSON(LAST_KEY, { start, end });
       renderResult(payload);
       setStatus(
-        state.rideMode ? "已騎乘模式：每 30 秒自動更新" : payload.message || "查詢完成",
+        state.rideMode ? "騎乘中，依官方更新頻率同步" : payload.message || "查詢完成",
         payload.decision === "ride" ? "good" : "bad"
       );
       scrollToResultIfNeeded(scrollToResult);
@@ -391,6 +422,10 @@
   }
 
   function swapStations() {
+    if (state.rideMode) {
+      return;
+    }
+
     const start = startInput.value;
     startInput.value = endInput.value;
     endInput.value = start;
@@ -407,33 +442,18 @@
     }
 
     const presets = readJSON(PRESET_KEY, []);
-    const presetName = `${start} → ${end}`;
     const next = [
-      { name: presetName, start, end },
-      ...presets.filter((item) => item.name !== presetName)
+      { start, end },
+      ...presets.filter((item) => !(item.start === start && item.end === end))
     ].slice(0, 8);
     writeJSON(PRESET_KEY, next);
     renderPresets();
     setStatus("已儲存配置", "good");
   }
 
-  function loadLast() {
-    const last = readJSON(LAST_KEY, null);
-    if (!last) {
-      setStatus("尚無上次使用紀錄", "warn");
-      return;
-    }
-
-    startInput.value = last.start || "";
-    endInput.value = last.end || "";
-    setStatus("已載入上次使用的站點");
-    renderSuggestions("start", startInput.value);
-    renderSuggestions("end", endInput.value);
-  }
-
   function applyGpsStart(force = false) {
     if (!navigator.geolocation) {
-      gpsHint.textContent = "此裝置不支援定位，請手動輸入起點。";
+      gpsHint.textContent = "此裝置不支援定位。";
       return;
     }
 
@@ -448,17 +468,13 @@
         const nearest = nearestStationByGPS(position.coords.latitude, position.coords.longitude);
         if (nearest) {
           startInput.value = nearest.name;
-          gpsHint.textContent = `已預設最近站點：${nearest.name}`;
-          renderSuggestions("start", startInput.value);
-          if (!endInput.value.trim()) {
-            setStatus(`已使用目前位置預設起點：${nearest.name}`);
-          }
+          gpsHint.textContent = `已帶入最近起點：${nearest.name}`;
         } else {
-          gpsHint.textContent = "已取得定位，但找不到可用站點。";
+          gpsHint.textContent = "已定位，但找不到最近站點。";
         }
       },
       () => {
-        gpsHint.textContent = "定位被拒絕或失敗，請手動輸入起點。";
+        gpsHint.textContent = "定位失敗，請手動輸入起點。";
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
     );
@@ -475,17 +491,20 @@
     }
 
     if (enabled) {
+      hideSuggestions("start");
       state.rideTimer = setInterval(() => {
-        if (startInput.value.trim() && endInput.value.trim()) {
+        if (endInput.value.trim()) {
           checkRoute({ silent: true });
         }
-      }, 30_000);
+      }, RIDE_REFRESH_MS);
     }
   }
 
   function bindSuggestions(input, field) {
     input.addEventListener("input", () => renderSuggestions(field, input.value));
-    input.addEventListener("focus", () => renderSuggestions(field, input.value));
+    input.addEventListener("focus", () => {
+      hideSuggestions(field);
+    });
     input.addEventListener("blur", () => {
       window.setTimeout(() => hideSuggestions(field), 120);
     });
@@ -514,14 +533,19 @@
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    triggerGoEffect();
     checkRoute({ scrollToResult: true });
   });
 
   swapBtn.addEventListener("click", swapStations);
   saveBtn.addEventListener("click", savePreset);
   gpsBtn.addEventListener("click", () => applyGpsStart(true));
-  useLastBtn.addEventListener("click", loadLast);
-  rideToggle.addEventListener("click", () => setRideMode(!state.rideMode));
+  rideToggle.addEventListener("click", () => {
+    setRideMode(!state.rideMode);
+    if (state.rideMode && endInput.value.trim()) {
+      checkRoute({ scrollToResult: true });
+    }
+  });
 
   presetList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-index]");
@@ -537,9 +561,8 @@
 
     startInput.value = preset.start;
     endInput.value = preset.end;
-    setStatus(`已載入配置：${preset.name}`);
-    renderSuggestions("start", startInput.value);
-    renderSuggestions("end", endInput.value);
+    setStatus(`已載入配置：${preset.start} → ${preset.end}`);
+    checkRoute({ scrollToResult: true });
   });
 
   bindSuggestions(startInput, "start");
@@ -548,7 +571,7 @@
   bindSuggestionPanel(endSuggestions);
 
   renderPresets();
-  setRideMode(state.rideMode);
+  setRideVisuals(state.rideMode);
 
   const last = readJSON(LAST_KEY, null);
   if (last) {
@@ -562,15 +585,19 @@
       if (!startInput.value.trim()) {
         applyGpsStart(false);
       } else {
-        renderSuggestions("start", startInput.value);
-        renderSuggestions("end", endInput.value);
-        gpsHint.textContent = "站點清單已載入，可直接輸入查詢。";
+        gpsHint.textContent = "已載入上次使用的站點。";
       }
       return null;
     })
     .catch(() => {
       gpsHint.textContent = "站點清單載入失敗，但仍可直接查詢。";
     });
+
+  if (state.rideMode && endInput.value.trim()) {
+    state.rideTimer = setInterval(() => {
+      checkRoute({ silent: true });
+    }, RIDE_REFRESH_MS);
+  }
 
   window.addEventListener("beforeunload", () => {
     if (state.rideTimer) {

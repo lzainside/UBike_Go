@@ -8,79 +8,84 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
+    <main class="app-shell">
+      <section class="result-card" id="result-card" aria-live="polite">
+        <div class="result-top">
+          <div>
+            <div class="status" id="status-line">尚未查詢</div>
+            <div id="result-main" class="result-main">輸入起點與終點後，按下 GO!!</div>
+          </div>
+          <div class="result-controls">
+            <div class="live-indicator" id="live-indicator" hidden>
+              <span class="live-dot"></span>
+              <span id="live-text">更新中</span>
+            </div>
+            <button type="button" id="ride-toggle" class="mode-btn">騎車</button>
+          </div>
+        </div>
+        <div id="result-details" class="result-details"></div>
+      </section>
+
+      <section class="hero hero-min">
+        <div class="brand-mark">U</div>
         <div class="hero-copy">
           <p class="eyebrow">Ubike go</p>
           <h1>騎不騎ubike</h1>
         </div>
-        <div class="hero-orb" aria-hidden="true"></div>
       </section>
 
       <section class="panel">
         <form id="check-form" class="form" autocomplete="off">
-          <label class="field">
-            <span>起點站</span>
-            <div class="field-wrap">
-              <input
-                id="start-input"
-                name="start"
-                placeholder="例如：中山5、科技大樓"
-                autocomplete="off"
-              />
-              <div id="start-suggestions" class="suggestions" hidden></div>
-            </div>
-          </label>
+          <div class="route-row">
+            <label class="field field-start" id="start-field">
+              <span>起點</span>
+              <div class="field-wrap">
+                <input
+                  id="start-input"
+                  name="start"
+                  placeholder="例如：中山5、科技大樓"
+                  autocomplete="off"
+                />
+                <div id="start-suggestions" class="suggestions" hidden></div>
+              </div>
+            </label>
 
-          <label class="field">
-            <span>終點站</span>
-            <div class="field-wrap">
-              <input
-                id="end-input"
-                name="end"
-                placeholder="例如：六張犁"
-                autocomplete="off"
-              />
-              <div id="end-suggestions" class="suggestions" hidden></div>
+            <div class="route-actions">
+              <button type="button" id="swap-btn" class="icon-btn" aria-label="交換起終點">⇅</button>
+              <button type="button" id="save-btn" class="icon-btn" aria-label="儲存配置">✦</button>
             </div>
-          </label>
 
-          <div class="actions">
-            <button type="button" id="swap-btn" class="secondary">交換起終點</button>
-            <button type="button" id="save-btn" class="secondary">儲存配置</button>
-            <button type="button" id="gps-btn" class="secondary">使用目前位置</button>
-            <button type="submit" class="primary">開始判斷</button>
+            <label class="field field-end">
+              <span>終點</span>
+              <div class="field-wrap">
+                <input
+                  id="end-input"
+                  name="end"
+                  placeholder="例如：六張犁"
+                  autocomplete="off"
+                />
+                <div id="end-suggestions" class="suggestions" hidden></div>
+              </div>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button type="button" id="gps-btn" class="icon-btn gps-btn" aria-label="使用目前位置">⌖</button>
+            <div class="hint" id="gps-hint">允許定位後，會自動帶入最近起點。</div>
+            <button type="submit" id="go-btn" class="go-btn">GO!!</button>
           </div>
         </form>
-
-        <div class="compact-row">
-          <button type="button" id="ride-toggle" class="pill">已騎乘模式：關閉</button>
-          <button type="button" id="use-last-btn" class="pill">載入上次使用</button>
-          <div class="hint" id="gps-hint">尚未定位，允許後會自動選最近站點作為起點。</div>
-        </div>
 
         <div class="config-area">
           <div class="section-title">已儲存配置</div>
           <div id="preset-list" class="preset-list"></div>
         </div>
-      </section>
-
-      <section class="result-card" id="result-card" aria-live="polite">
-        <div class="status-row">
-          <div class="status" id="status-line">尚未查詢</div>
-          <div class="live-indicator" id="live-indicator" hidden>
-            <span class="live-dot"></span>
-            <span>更新中</span>
-          </div>
-        </div>
-        <div id="result-main" class="result-main">輸入站點後開始判斷。</div>
-        <div id="result-details" class="result-details"></div>
       </section>
     </main>
 
