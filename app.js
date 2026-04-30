@@ -311,6 +311,17 @@
     });
   }
 
+  function formatBikeCounts(payload) {
+    const regularBikes = Number(payload.start_regular_bikes ?? payload.start_bikes ?? 0);
+    const electricBikes = payload.start_electric_bikes;
+
+    if (electricBikes === null || electricBikes === undefined) {
+      return `一般車 ${regularBikes} 台`;
+    }
+
+    return `一般車 ${regularBikes} 台 電動車 ${Number(electricBikes ?? 0)} 台`;
+  }
+
   function renderResult(payload) {
     if (payload.error) {
       resultMain.textContent = payload.message || "查詢失敗";
@@ -348,7 +359,7 @@
 
     resultMain.textContent = rideAllowed ? "可騎車" : "不建議騎車";
     const lines = [
-      `起點：${payload.start_station}（車輛 ${payload.start_bikes}）`,
+      `起點：${payload.start_station}（${formatBikeCounts(payload)}）`,
       `終點：${payload.end_station}（車位 ${payload.end_slots}）`
     ];
 

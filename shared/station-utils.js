@@ -32,11 +32,15 @@
     const isNewTaipei = city === "newTaipei" || Object.hasOwn(station, "sbi_quantity");
 
     if (isNewTaipei) {
+      const regularBikes = Number(station.yb2_quantity ?? station.sbi_quantity ?? 0);
+      const electricBikes = Number(station.eyb_quantity ?? 0);
       return {
         city: "newTaipei",
         sno: station.sno,
         sna: station.sna,
-        sbi: Number(station.sbi_quantity ?? 0),
+        sbi: Number(station.sbi_quantity ?? regularBikes + electricBikes),
+        regular_bikes: regularBikes,
+        electric_bikes: electricBikes,
         bemp: Number(station.bemp ?? 0),
         lat: Number(station.lat ?? 0),
         lng: Number(station.lng ?? 0),
@@ -45,11 +49,14 @@
       };
     }
 
+    const totalBikes = Number(station.sbi ?? station.available_rent_bikes ?? 0);
     return {
       city: "taipei",
       sno: station.sno,
       sna: station.sna,
-      sbi: Number(station.sbi ?? station.available_rent_bikes ?? 0),
+      sbi: totalBikes,
+      regular_bikes: totalBikes,
+      electric_bikes: null,
       bemp: Number(station.bemp ?? station.available_return_bikes ?? 0),
       lat: Number(station.lat ?? station.latitude ?? 0),
       lng: Number(station.lng ?? station.longitude ?? 0),
@@ -64,6 +71,11 @@
       name: stripBikePrefix(station.sna),
       raw_name: station.sna,
       bikes: Number(station.sbi ?? 0),
+      regular_bikes: Number(station.regular_bikes ?? station.sbi ?? 0),
+      electric_bikes:
+        station.electric_bikes === null || station.electric_bikes === undefined
+          ? null
+          : Number(station.electric_bikes ?? 0),
       slots: Number(station.bemp ?? 0),
       lat: Number(station.lat ?? 0),
       lng: Number(station.lng ?? 0),
@@ -164,6 +176,8 @@
         return {
           station: view.name,
           bikes: view.bikes,
+          regular_bikes: view.regular_bikes,
+          electric_bikes: view.electric_bikes,
           slots: view.slots,
           distance_m: Math.round(distanceMeters(targetStation, station)),
           city: view.city
@@ -175,13 +189,18 @@
   }
 
   function makeDecision(startStation, endStation) {
-    const startBikes = Number(startStation?.sbi ?? 0);
+    const startBikes = Number(startStation?.regular_bikes ?? startStation?.sbi ?? 0);
+    const startElectricBikes =
+      startStation?.electric_bikes === null || startStation?.electric_bikes === undefined
+        ? null
+        : Number(startStation?.electric_bikes ?? 0);
     const endSlots = Number(endStation?.bemp ?? 0);
     const ride = startBikes >= 1 && endSlots >= 1;
 
     return {
       start_station: stripBikePrefix(startStation?.sna ?? ""),
       start_bikes: startBikes,
+      start_electric_bikes: startElectricBikes,
       end_station: stripBikePrefix(endStation?.sna ?? ""),
       end_slots: endSlots,
       decision: ride ? "ride" : "walk",
@@ -256,6 +275,8 @@
         name: view.name,
         raw_name: view.raw_name,
         bikes: view.bikes,
+        regular_bikes: view.regular_bikes,
+        electric_bikes: view.electric_bikes,
         slots: view.slots,
         lat: view.lat,
         lng: view.lng,
@@ -322,7 +343,10 @@
         const response = {
           ...decision,
           start_station: startView.name,
-          start_bikes: startView.bikes,
+          start_bikes: startView.regular_bikes,
+          start_total_bikes: startView.bikes,
+          start_regular_bikes: startView.regular_bikes,
+          start_electric_bikes: startView.electric_bikes,
           end_station: endView.name,
           end_slots: endView.slots,
           start_city: startView.city,

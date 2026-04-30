@@ -33,6 +33,8 @@ const newTaipeiStations = [
     sno: "500501001",
     sna: "YouBike2.0_捷運大坪林站(5號出口)",
     sbi_quantity: 6,
+    yb2_quantity: 5,
+    eyb_quantity: 1,
     bemp: 7,
     lat: 24.9821,
     lng: 121.5415,
@@ -42,6 +44,8 @@ const newTaipeiStations = [
     sno: "500501002",
     sna: "YouBike2.0_捷運七張站",
     sbi_quantity: 2,
+    yb2_quantity: 2,
+    eyb_quantity: 0,
     bemp: 0,
     lat: 24.9757,
     lng: 121.5421,
@@ -115,6 +119,31 @@ async function main() {
   );
 
   results.push(
+    await run("decision excludes electric bikes from start availability", () => {
+      const electricOnlyStart = normalizeUpstreamStation(
+        {
+          sno: "500501003",
+          sna: "YouBike2.0_電動車示範站",
+          sbi_quantity: 1,
+          yb2_quantity: 0,
+          eyb_quantity: 1,
+          bemp: 4,
+          lat: 24.98,
+          lng: 121.54,
+          act: "1"
+        },
+        "newTaipei"
+      );
+
+      const result = makeDecision(electricOnlyStart, stations[0]);
+      assert.equal(result.decision, "walk");
+      assert.equal(result.start_bikes, 0);
+      assert.equal(result.start_electric_bikes, 1);
+      assert.deepEqual(result.reasons, ["起點車輛不足（0）"]);
+    })
+  );
+
+  results.push(
     await run("handler returns station_not_found for unknown station", async () => {
       const handler = createCheckHandler({
         fetchImpl: async (url) => ({
@@ -131,6 +160,29 @@ async function main() {
       assert.equal(response.statusCode, 404);
       const body = JSON.parse(response.body);
       assert.equal(body.error, "station_not_found");
+    })
+  );
+
+  results.push(
+    await run("handler response exposes regular and electric bike counts", async () => {
+      const handler = createCheckHandler({
+        fetchImpl: async (url) => ({
+          ok: true,
+          json: async () => (url.includes("ntpc") ? newTaipeiStations : taipeiStations)
+        }),
+        ttlMs: 0
+      });
+
+      const response = await handler({
+        rawUrl: "https://example.com/check?start=大坪林&end=科技"
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.equal(body.start_bikes, 5);
+      assert.equal(body.start_regular_bikes, 5);
+      assert.equal(body.start_electric_bikes, 1);
+      assert.equal(body.start_total_bikes, 6);
     })
   );
 
@@ -172,6 +224,8 @@ async function main() {
       assert.equal(body.stations.length, 4);
       assert.equal(body.stations[2].name, "捷運大坪林站(5號出口)");
       assert.equal(body.stations[2].city, "newTaipei");
+      assert.equal(body.stations[2].regular_bikes, 5);
+      assert.equal(body.stations[2].electric_bikes, 1);
     })
   );
 

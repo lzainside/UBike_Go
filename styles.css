@@ -296,7 +296,7 @@ input::placeholder {
 .route-actions {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  align-items: center;
 }
 
 .icon-btn {
@@ -327,9 +327,13 @@ input::placeholder {
 
 .action-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 10px;
   align-items: center;
+}
+
+.swap-btn svg {
+  transition: transform 0.16s ease;
 }
 
 .hint {
@@ -494,9 +498,25 @@ input::placeholder {
   .route-row {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
+
+  .swap-btn svg {
+    transform: rotate(0deg);
+  }
 }
 
 @media (max-width: 759px) {
+  .route-row {
+    grid-template-columns: 1fr;
+  }
+
+  .route-actions {
+    justify-content: center;
+  }
+
+  .swap-btn svg {
+    transform: rotate(90deg);
+  }
+
   .result-top {
     flex-direction: column;
   }
@@ -507,7 +527,7 @@ input::placeholder {
   }
 
   .action-row {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto auto 1fr;
   }
 
   .go-btn {
