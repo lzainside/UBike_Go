@@ -22,6 +22,7 @@ body {
   min-height: 100%;
   font-family: "Noto Sans TC", sans-serif;
   color: var(--text);
+  color-scheme: light;
   background:
     radial-gradient(circle at 15% 10%, rgba(255, 212, 93, 0.55), transparent 28%),
     radial-gradient(circle at 88% 18%, rgba(255, 242, 198, 0.85), transparent 22%),
@@ -29,7 +30,7 @@ body {
 }
 
 body {
-  padding: 14px;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
 }
 
 .app-shell {
@@ -37,6 +38,23 @@ body {
   margin: 0 auto;
   display: grid;
   gap: 14px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  transform: translateY(-140%);
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--paper-strong);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--shadow);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 .result-card,
@@ -152,6 +170,7 @@ body {
 .go-btn {
   border: 0;
   cursor: pointer;
+  touch-action: manipulation;
   transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 
@@ -159,6 +178,15 @@ body {
 .icon-btn:hover,
 .go-btn:hover {
   transform: translateY(-1px);
+}
+
+.mode-btn:focus-visible,
+.icon-btn:focus-visible,
+.go-btn:focus-visible,
+.preset-item:focus-visible,
+.suggestion-item:focus-visible {
+  outline: 3px solid rgba(226, 165, 35, 0.42);
+  outline-offset: 2px;
 }
 
 .mode-btn {
@@ -209,6 +237,7 @@ h1 {
   margin: 2px 0 0;
   font-size: 1.25rem;
   line-height: 1.1;
+  text-wrap: balance;
 }
 
 .panel {
@@ -260,6 +289,10 @@ input:focus {
   box-shadow: 0 0 0 4px var(--gold-glow);
 }
 
+input::placeholder {
+  color: rgba(108, 89, 48, 0.8);
+}
+
 .route-actions {
   display: flex;
   justify-content: center;
@@ -275,6 +308,17 @@ input:focus {
   color: var(--text);
   font-size: 1rem;
   font-weight: 800;
+}
+
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
 }
 
 .gps-btn {
@@ -382,6 +426,10 @@ input:focus {
   cursor: pointer;
 }
 
+.preset-item:hover {
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .preset-item small {
   color: var(--muted);
 }
@@ -465,5 +513,16 @@ input:focus {
   .go-btn {
     grid-column: 1 / -1;
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -3,10 +3,11 @@ const {
   findBestStation,
   makeDecision,
   createCheckHandler,
-  normalizeText
+  normalizeText,
+  normalizeUpstreamStation
 } = require("../shared/station-utils");
 
-const stations = [
+const taipeiStations = [
   {
     sno: "1",
     sna: "YouBike2.0_捷運科技大樓站",
@@ -24,16 +25,33 @@ const stations = [
     lat: 25.02655,
     lng: 121.544,
     act: "1"
+  }
+];
+
+const newTaipeiStations = [
+  {
+    sno: "500501001",
+    sna: "YouBike2.0_捷運大坪林站(5號出口)",
+    sbi_quantity: 6,
+    bemp: 7,
+    lat: 24.9821,
+    lng: 121.5415,
+    act: "1"
   },
   {
-    sno: "3",
-    sna: "YouBike2.0_六張犁",
-    sbi: 6,
+    sno: "500501002",
+    sna: "YouBike2.0_捷運七張站",
+    sbi_quantity: 2,
     bemp: 0,
-    lat: 25.0238,
-    lng: 121.552,
+    lat: 24.9757,
+    lng: 121.5421,
     act: "1"
   }
+];
+
+const stations = [
+  ...taipeiStations.map((station) => normalizeUpstreamStation(station, "taipei")),
+  ...newTaipeiStations.map((station) => normalizeUpstreamStation(station, "newTaipei"))
 ];
 
 async function run(name, fn) {
@@ -59,15 +77,22 @@ async function main() {
   );
 
   results.push(
-    await run("fuzzy match finds partial station name", () => {
+    await run("fuzzy match finds Taipei partial station name", () => {
       const match = findBestStation(stations, "科技");
       assert.ok(match.station.sna.includes("科技"));
     })
   );
 
   results.push(
+    await run("fuzzy match finds New Taipei station name", () => {
+      const match = findBestStation(stations, "大坪林");
+      assert.ok(match.station.sna.includes("大坪林"));
+    })
+  );
+
+  results.push(
     await run("decision is ride when bikes and slots are available", () => {
-      const result = makeDecision(stations[0], stations[1]);
+      const result = makeDecision(stations[0], stations[2]);
       assert.equal(result.decision, "ride");
       assert.equal(result.message, "可騎Ubike");
     })
@@ -83,7 +108,7 @@ async function main() {
 
   results.push(
     await run("decision is walk when no slots", () => {
-      const result = makeDecision(stations[0], stations[2]);
+      const result = makeDecision(stations[0], stations[3]);
       assert.equal(result.decision, "walk");
       assert.deepEqual(result.reasons, ["終點車位不足（0）"]);
     })
@@ -92,9 +117,9 @@ async function main() {
   results.push(
     await run("handler returns station_not_found for unknown station", async () => {
       const handler = createCheckHandler({
-        fetchImpl: async () => ({
+        fetchImpl: async (url) => ({
           ok: true,
-          json: async () => stations
+          json: async () => (url.includes("ntpc") ? newTaipeiStations : taipeiStations)
         }),
         ttlMs: 0
       });
@@ -119,7 +144,7 @@ async function main() {
       });
 
       const response = await handler({
-        rawUrl: "https://example.com/check?start=科技&end=六張犁"
+        rawUrl: "https://example.com/check?start=科技&end=大坪林"
       });
 
       assert.equal(response.statusCode, 503);
@@ -131,9 +156,9 @@ async function main() {
   results.push(
     await run("handler returns station catalog for list mode", async () => {
       const handler = createCheckHandler({
-        fetchImpl: async () => ({
+        fetchImpl: async (url) => ({
           ok: true,
-          json: async () => stations
+          json: async () => (url.includes("ntpc") ? newTaipeiStations : taipeiStations)
         }),
         ttlMs: 0
       });
@@ -144,8 +169,9 @@ async function main() {
 
       assert.equal(response.statusCode, 200);
       const body = JSON.parse(response.body);
-      assert.equal(body.stations.length, stations.length);
-      assert.equal(body.stations[0].name, "捷運科技大樓站");
+      assert.equal(body.stations.length, 4);
+      assert.equal(body.stations[2].name, "捷運大坪林站(5號出口)");
+      assert.equal(body.stations[2].city, "newTaipei");
     })
   );
 

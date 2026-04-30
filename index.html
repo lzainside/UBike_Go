@@ -15,6 +15,7 @@
   </head>
   <body>
     <main class="app-shell">
+      <a class="skip-link" href="#check-form">跳到查詢</a>
       <section class="result-card" id="result-card" aria-live="polite">
         <div class="result-top">
           <div>
@@ -49,16 +50,25 @@
                 <input
                   id="start-input"
                   name="start"
-                  placeholder="例如：中山5、科技大樓"
+                  placeholder="例如：中山5、科技大樓…"
                   autocomplete="off"
+                  spellcheck="false"
                 />
                 <div id="start-suggestions" class="suggestions" hidden></div>
               </div>
             </label>
 
             <div class="route-actions">
-              <button type="button" id="swap-btn" class="icon-btn" aria-label="交換起終點">⇅</button>
-              <button type="button" id="save-btn" class="icon-btn" aria-label="儲存配置">✦</button>
+              <button type="button" id="swap-btn" class="icon-btn" aria-label="交換起終點">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 7h10m0 0-3-3m3 3-3 3M17 17H7m0 0 3-3m-3 3 3 3" />
+                </svg>
+              </button>
+              <button type="button" id="save-btn" class="icon-btn" aria-label="儲存配置">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M7 4h8l4 4v12H5V4h2Zm0 0v6h8V4M9 20v-6h6v6" />
+                </svg>
+              </button>
             </div>
 
             <label class="field field-end">
@@ -67,8 +77,9 @@
                 <input
                   id="end-input"
                   name="end"
-                  placeholder="例如：六張犁"
+                  placeholder="例如：六張犁…"
                   autocomplete="off"
+                  spellcheck="false"
                 />
                 <div id="end-suggestions" class="suggestions" hidden></div>
               </div>
@@ -76,7 +87,11 @@
           </div>
 
           <div class="action-row">
-            <button type="button" id="gps-btn" class="icon-btn gps-btn" aria-label="使用目前位置">⌖</button>
+            <button type="button" id="gps-btn" class="icon-btn gps-btn" aria-label="使用目前位置">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v3m0 12v3m9-9h-3M6 12H3m13.5 0A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 4.5 4.5Z" />
+              </svg>
+            </button>
             <div class="hint" id="gps-hint">允許定位後，會自動帶入最近起點。</div>
             <button type="submit" id="go-btn" class="go-btn">GO!!</button>
           </div>

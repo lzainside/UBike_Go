@@ -7,7 +7,11 @@
     root.UBikeUtils = api;
   }
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  const DATA_URL = "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json";
+  const DATA_URLS = {
+    taipei: "https://tcgbusfs.blob.core.windows.net/dotapp/youbike/v2/youbike_immediate.json",
+    newTaipei:
+      "https://data.ntpc.gov.tw/api/datasets/010e5b15-3823-4b20-b401-b1cf000550c5/json?page=0&size=5000"
+  };
   const DEFAULT_CACHE_TTL_MS = 55_000;
   const PREFIX_RE = /^youbike2\.0[_-]?/i;
 
@@ -24,14 +28,45 @@
     return String(name ?? "").replace(/^YouBike2\.0_/, "");
   }
 
-  function formatStationView(station) {
+  function normalizeUpstreamStation(station, city) {
+    const isNewTaipei = city === "newTaipei" || Object.hasOwn(station, "sbi_quantity");
+
+    if (isNewTaipei) {
+      return {
+        city: "newTaipei",
+        sno: station.sno,
+        sna: station.sna,
+        sbi: Number(station.sbi_quantity ?? 0),
+        bemp: Number(station.bemp ?? 0),
+        lat: Number(station.lat ?? 0),
+        lng: Number(station.lng ?? 0),
+        act: String(station.act ?? "1"),
+        mday: station.mday ?? ""
+      };
+    }
+
     return {
-      name: stripBikePrefix(station.sna),
-      raw_name: station.sna,
-      bikes: Number(station.sbi ?? station.available_rent_bikes ?? 0),
-      slots: Number(station.bemp ?? station.available_return_bikes ?? 0),
+      city: "taipei",
+      sno: station.sno,
+      sna: station.sna,
+      sbi: Number(station.sbi ?? station.available_rent_bikes ?? 0),
+      bemp: Number(station.bemp ?? station.available_return_bikes ?? 0),
       lat: Number(station.lat ?? station.latitude ?? 0),
       lng: Number(station.lng ?? station.longitude ?? 0),
+      act: String(station.act ?? "1"),
+      mday: station.mday ?? ""
+    };
+  }
+
+  function formatStationView(station) {
+    return {
+      city: station.city ?? "unknown",
+      name: stripBikePrefix(station.sna),
+      raw_name: station.sna,
+      bikes: Number(station.sbi ?? 0),
+      slots: Number(station.bemp ?? 0),
+      lat: Number(station.lat ?? 0),
+      lng: Number(station.lng ?? 0),
       active: String(station.act ?? "1") === "1"
     };
   }
@@ -130,7 +165,8 @@
           station: view.name,
           bikes: view.bikes,
           slots: view.slots,
-          distance_m: Math.round(distanceMeters(targetStation, station))
+          distance_m: Math.round(distanceMeters(targetStation, station)),
+          city: view.city
         };
       })
       .filter((item) => Number.isFinite(item.distance_m))
@@ -139,8 +175,8 @@
   }
 
   function makeDecision(startStation, endStation) {
-    const startBikes = Number(startStation?.sbi ?? startStation?.available_rent_bikes ?? 0);
-    const endSlots = Number(endStation?.bemp ?? endStation?.available_return_bikes ?? 0);
+    const startBikes = Number(startStation?.sbi ?? 0);
+    const endSlots = Number(endStation?.bemp ?? 0);
     const ride = startBikes >= 1 && endSlots >= 1;
 
     return {
@@ -159,7 +195,26 @@
     };
   }
 
-  function createStationCache(fetchImpl, dataUrl = DATA_URL, ttlMs = DEFAULT_CACHE_TTL_MS) {
+  async function fetchDataset(fetchImpl, url, city) {
+    const response = await fetchImpl(url, {
+      headers: {
+        accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`upstream response ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (!Array.isArray(json)) {
+      throw new Error("invalid station payload");
+    }
+
+    return json.map((station) => normalizeUpstreamStation(station, city));
+  }
+
+  function createStationCache(fetchImpl, dataUrls = DATA_URLS, ttlMs = DEFAULT_CACHE_TTL_MS) {
     const cache = {
       data: null,
       fetchedAt: 0,
@@ -176,28 +231,18 @@
         return cache.pending;
       }
 
-      cache.pending = (async () => {
-        const response = await fetchImpl(dataUrl, {
-          headers: {
-            accept: "application/json"
-          }
+      cache.pending = Promise.all([
+        fetchDataset(fetchImpl, dataUrls.taipei, "taipei"),
+        fetchDataset(fetchImpl, dataUrls.newTaipei, "newTaipei")
+      ])
+        .then(([taipeiStations, newTaipeiStations]) => {
+          cache.data = [...taipeiStations, ...newTaipeiStations];
+          cache.fetchedAt = Date.now();
+          return cache.data;
+        })
+        .finally(() => {
+          cache.pending = null;
         });
-
-        if (!response.ok) {
-          throw new Error(`upstream response ${response.status}`);
-        }
-
-        const json = await response.json();
-        if (!Array.isArray(json)) {
-          throw new Error("invalid station payload");
-        }
-
-        cache.data = json;
-        cache.fetchedAt = Date.now();
-        return json;
-      })().finally(() => {
-        cache.pending = null;
-      });
 
       return cache.pending;
     };
@@ -214,7 +259,8 @@
         slots: view.slots,
         lat: view.lat,
         lng: view.lng,
-        active: view.active
+        active: view.active,
+        city: view.city
       };
     });
   }
@@ -235,9 +281,9 @@
 
   function createCheckHandler(options = {}) {
     const fetchImpl = options.fetchImpl ?? fetch;
-    const dataUrl = options.dataUrl ?? DATA_URL;
+    const dataUrls = options.dataUrls ?? DATA_URLS;
     const ttlMs = options.ttlMs ?? DEFAULT_CACHE_TTL_MS;
-    const loadStations = createStationCache(fetchImpl, dataUrl, ttlMs);
+    const loadStations = createStationCache(fetchImpl, dataUrls, ttlMs);
 
     return async function handler(event) {
       const rawUrl = event?.rawUrl || event?.url || event?.path || "https://example.com/check";
@@ -279,6 +325,8 @@
           start_bikes: startView.bikes,
           end_station: endView.name,
           end_slots: endView.slots,
+          start_city: startView.city,
+          end_city: endView.city,
           updated_at: new Date().toISOString()
         };
 
@@ -297,9 +345,10 @@
   }
 
   return {
-    DATA_URL,
+    DATA_URLS,
     normalizeText,
     stripBikePrefix,
+    normalizeUpstreamStation,
     formatStationView,
     scoreStationMatch,
     findBestStation,
